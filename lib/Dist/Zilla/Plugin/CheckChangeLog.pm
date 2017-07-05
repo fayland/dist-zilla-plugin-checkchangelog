@@ -4,79 +4,73 @@ package Dist::Zilla::Plugin::CheckChangeLog;
 
 use 5.004;
 use Moose;
-use Moose::Autobox;
-with 'Dist::Zilla::Role::InstallTool';
+with 'Dist::Zilla::Role::AfterBuild';
 
 has filename => (
-    is      => 'ro',
-    isa     => 'Str',
-    default => '',
+    is  => 'ro',
+    isa => 'Str'
 );
 
-sub setup_installer {
-    my ( $self, undef ) = @_;
+sub after_build {
+    my ( $self, $args ) = @_;
 
+    my $root     = $args->{build_root};
+    my $filename = chomp $self->{filename};
     my @change_files;
-    my $filename = $self->{filename};
+
     if ($filename) {
         my $file = $self->zilla->root->file($filename);
-        die "[CheckChangeLog] $! $file\n" unless -e $file;
+        die "[CheckChangeLog] $! $filename\n" unless -e $file;
         push @change_files,
-          Dist::Zilla::File::OnDisk->new( { name => $filename } );
+          Dist::Zilla::File::OnDisk->new( { name => $file } );
     }
     else {
-        # grep files to check if there is any Changes file
-        my $filter = sub {
-            $_->name =~ m/Change/i
-              and $_->name ne $self->zilla->main_module->name;
-        };
-
-        my $files = $self->zilla->files->grep($filter);
-        undef $filter;
-        if ( scalar @$files ) {
-            push @change_files, @$files;
-        }
-        else {
-            die "[CheckChangeLog] No changelog file found.\n";
-        }
+        # Search for Changes or ChangeLog on build root
+        my @files = $self->_find_change_files($root);
+        die "[CheckChangeLog] No changelog file found.\n" unless scalar @files;
+        push @change_files, @files;
     }
 
-    my $zilla_ver = $self->zilla->version;
-    foreach my $file (@change_files) {
-        my $ok = $self->check_file_for_version( $file->content, $zilla_ver );
-        if ($ok) {
+    for my $file (@change_files) {
+        if ( $self->has_version( $file->content, $self->zilla->version ) ) {
             $self->log( "[CheckChangeLog] OK with " . $file->name );
             return;
         }
-
-        # XXX? prompt to edit?
     }
 
-    print "[CheckChangeLog] No Change Log in "
-      . join( ', ', map { $_->name } @change_files ) . "\n";
-    die "[CheckChangeLog] Please edit\n";
-
-    return;
+    my $msg = "[CheckChangeLog] No Change Log in ";
+    $msg .= join( ', ', map { $_->name } @change_files ) . "\n";
+    $self->log($msg);
+    $msg = "[CheckChangeLog] Update your Changes file with an entry for ";
+    $msg .= $self->zilla->version . "\n";
+    die $msg;
 }
 
-sub check_file_for_version {
+sub has_version {
     my ( $self, $content, $version ) = @_;
 
-    my @lines = split( /\n/, $content );
-    foreach (@lines) {
+    for my $line ( split( /\n/, $content ) ) {
 
-        # no blanket lines
-        next unless /\S/;
+        # no blank lines
+        next unless $line =~ /\S/;
 
         # skip things that look like bullets
-        next if /^\s+/;
-        next if /^\*/;
-        next if /^\-/;
+        next if $line =~ /^\s+/;
+        next if $line =~ /^\*/;
+        next if $line =~ /^\-/;
 
         # seen it?
-        return 1 if /\Q$version\E/;
+        return 1 if $line =~ /\Q$version\E/;
     }
     return 0;
+}
+
+sub _find_change_files {
+  my ($self, $root) = @_;
+  my $files = $self->zilla->files;
+  my $change_file_re = qr/Change(?:s|Log)?/i;
+  my $filter = sub { -e "$root/$_->{name}" && $_->{name} =~ $change_file_re };
+  grep { $filter->($_) } @{$files};
 }
 
 __PACKAGE__->meta->make_immutable;
@@ -85,23 +79,27 @@ no Moose;
 1;
 
 =head1 SYNOPSIS
- 
+
     # dist.ini
     [CheckChangeLog]
-    
+
     # or
     [CheckChangeLog]
     filename = Changes.pod
 
 =head1 DESCRIPTION
 
-The code is mostly a copy-paste of L<ShipIt::Step::CheckChangeLog> 
+ This plugin will examine your changes file after a build to make sure it has an entry for your distributions current version prior to a release.
+
+=head1 File name conventions
+
+ With no arguments CheckChangeLog will only look in files named Changes and ChangeLog (case insensitive) within the root directory of your dist. Note you can always pass a filename argument if you have an unconvential name and place for your changelog.
 
 =head1 METHODS
 
-=head2 setup_installer
+=head2 after_build
 
-=head2 check_file_for_version($content_str, $version_str)
+=head2 has_version($content_str, $version_str)
 
 =head1 AUTHORS
 
