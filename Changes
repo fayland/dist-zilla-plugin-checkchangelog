@@ -1,9 +1,12 @@
 Revision history for Dist-Zilla-Plugin-CheckChangeLog
 
+0.04    2017-07-05
+        - hidden from PAUSE
+
 0.03    2016-07-06
         - Become an AfterBuild plugin instead of a InstallTool plugin
         - Don't use Moose::Autobox in an effort to keep lean
-        - Remove default value of empty string for filename attr 
+        - Remove default value of empty string for filename attr
         - Rename check_file_for_version to has_version
         - Only search within the root of the dist and only look for files
           named change, changes, or changelog (case insenstive)
