@@ -4,6 +4,7 @@ package Dist::Zilla::Plugin::CheckChangeLog;
 
 use 5.004;
 use Moose;
+
 with 'Dist::Zilla::Role::AfterBuild';
 
 has filename => (
@@ -15,14 +16,14 @@ sub after_build {
     my ( $self, $args ) = @_;
 
     my $root     = $args->{build_root};
-    my $filename = chomp $self->{filename};
+    my $filename = $self->{filename};
     my @change_files;
 
     if ($filename) {
-        my $file = $self->zilla->root->file($filename);
-        die "[CheckChangeLog] $! $filename\n" unless -e $file;
+        chomp($filename);
+        die "[CheckChangeLog] $! $filename\n" unless -e $filename;
         push @change_files,
-          Dist::Zilla::File::OnDisk->new( { name => $file } );
+          Dist::Zilla::File::OnDisk->new( { name => $filename } );
     }
     else {
         # Search for Changes or ChangeLog on build root
